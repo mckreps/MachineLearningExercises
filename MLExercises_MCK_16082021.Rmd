@@ -1,0 +1,986 @@
+---
+title: "Machine Learning Exercises"
+output:
+  pdf_document: default
+  html_document: default
+  github: default
+---
+options(knitr.duplicate.label = "allow")
+
+```{r setup, include=FALSE}
+install.packages("rmarkdown")
+install.packages("tinytex")
+
+tinytex::install_tinytex()
+rm(list=ls())
+greendata=read.csv(file='//Users/marycarolinekreps/Desktop/greenbuildings.csv',header=TRUE)
+options(scipen=999)  # turn-off scientific notation like 1e+48
+library(ggplot2)
+library(dplyr)
+theme_set(theme_bw())  # pre-set the bw theme.
+data("greendata", package = "ggplot2")
+cor(greendata)
+
+# a quick heatmap visualization
+ggcorrplot::ggcorrplot(cor(greendata))
+
+#reorder the variables by hierarchical clustering
+ggcorrplot::ggcorrplot(cor(greendata))
+
+#data cleaning
+greendata$cluster = as.factor(greendata$cluster)
+greendata$renovated = as.factor(greendata$renovated)
+greendata$class_a = as.factor(greendata$class_a)
+greendata$class_b = as.factor(greendata$class_b)
+greendata$LEED = as.factor(greendata$LEED)
+greendata$Energystar = as.factor(data$Energystar)
+greendata$green_rating = as.factor(greendata$green_rating)
+greendata$net = as.factor(greendata$net)
+greendata$amenities = as.factor(greendata$amenities)
+greendata = greendata[complete.cases(data),]
+greendata = subset(greendata,select = -c(LEED,Energystar,cd_total_07,hd_total07))  #remove columns because they are included in another variable
+
+#put all classes into one variable
+for (i in 1:nrow(greendata)){
+  if(greendata[i,'class_a']==1){
+    greendata[i,'class'] = 3
+    }else if(greendata[i,'class_b']==1){
+    greendata[i,'class'] = 2
+    }else{
+    greendata[i,'class'] = 1
+  }
+}
+greendata['class']=as.factor(greendata$class)
+greendata = subset(greendata,select = -c(class_a,class_b))  #remove class_a and class_b columns as we already consolidated them into a new 'class' column
+
+#create total_rent column, #take into account of the size and leasing rate of the building
+greendata['total_rent'] = greendata$Rent * greendata$leasing_rate*0.01 *greendata$size
+
+#separate green buildings 
+green = greendata[greendata['green_rating']==1,]
+normal = greendata[greendata['green_rating']!=1,]
+
+cat('mean rent for green buildings = ', mean(green$Rent))
+
+cat('mean rent for non-green buildings = ', mean(normal$Rent))
+
+cat('difference between mean rent of green buildings and non-green builings =', mean(green$Rent)-mean(normal$Rent))
+
+cat('mean total rent for green buildings = ', mean(green$total_rent))
+
+cat('mean total rent for non-green buildings = ', mean(normal$total_rent))
+
+cat('difference between mean total rent of green buildings and non-green builings =', mean(green$total_rent)-mean(normal$total_rent))
+```
+
+This is a plot showing all of the correlation found in the data
+- cluster_rent& electricity costs
+-Gas_Costs& precipitation
+-Total degree days & heat days
+-green_rating&Energystar
+-class_b and class_a
+
+It makes sense what is correlated. The ratings for the buildings are closely correlated with each other. The total degree days and heat days being correlated provide support for green buildings.
+```{r greendata one}
+first <- ggplot(greendata, aes(x=leasing_rate, y=Rent)) + 
+  geom_point(aes(col=green_rating, size=size)) + 
+  geom_smooth(method="loess", se=F) + 
+  xlim(c(0, 100)) + 
+  ylim(c(0, 100)) + 
+  labs(subtitle="Leasing Rate vs Rent", 
+       y="Rent", 
+       x="Leasing Rate", 
+       title="Scatterplot", 
+       caption = "Source: Machine Learning curriculum")
+
+plot(first)
+```
+This scatterplot showing the percentage of occupancy versus the overall rent. You can indeed charge a premium for a green building and have high occupancy for a green building. Note that there green buildings have higher occupancy comparatively.
+
+```{r greendata two, echo=FALSE}
+  second <- ggplot(greendata, aes(x=cluster_rent, y=size)) + 
+  geom_point(aes(col=green_rating)) + 
+  geom_smooth(method="loess", se=F) + 
+  xlim(c(10, 75)) + 
+  ylim(c(1500, 3800000)) + 
+  labs(subtitle="Local Rent vs Size", 
+       y="Size", 
+       x="Local Average Rent", 
+       title="Scatterplot", 
+       caption = "Source: Machine Learning curriculum")
+
+plot(second)
+```
+This graph indicates that the data points rent is within the local scatterplot. The rent for different type of buildings is contained within the neighborhood.It's well contained so you don't have to worry about charging an unreasonable premium.
+
+```{r greendata three, echo=FALSE}
+ third <- ggplot(greendata, aes(x=Rent, y=size)) + 
+  geom_point(aes(col=green_rating)) + 
+  geom_smooth(method="loess", se=F) + 
+  xlim(c(0, 125)) + 
+  ylim(c(1500, 3800000)) + 
+  labs(subtitle="Rent vs Size", 
+       y="Size", 
+       x="Rent", 
+       title="Scatterplot", 
+       caption = "Source: Machine Learning curriculum")
+
+plot(third)
+```
+The rent for the green buildings is noticeably higher, as demonstrated here.
+I did a boxplot below that does demonstrate green buildings indeed have higher rent.
+
+```{r, echo=F,message=FALSE, warning=FALSE}
+boxplot(normal$Rent, green$Rent, 
+        ylab = 'rent', 
+        names=c('non-green buildings', 'green buildings'))
+```
+```{r,echo=F,message=FALSE, warning=FALSE, out.width="33%"}
+summary(green$age)-summary(normal$age)
+boxplot(green$age,normal$age, ylab = 'age', names = c('Green buildings', 'Non-green buildings')) 
+```
+It was evident that green builidings in general were newer, which leads to higher rent.
+
+Looking at the dataset at the whole, it is evident that green buildings are on the rise, they are higher quality, they are newer, and they are charging higher rent. However, the increase in rent is not outrageous and is justified. It is a financially sound reason to move forward with the construction of a green building.
+
+
+Problem #2: ABIA
+```{r ABIAdata, echo=FALSE}
+rm(list=ls())
+ABIAdata=read.csv(file='//Users/marycarolinekreps/Desktop/ABIAData.csv',header=TRUE)
+aircodes=read.csv(file='//Users/marycarolinekreps/Desktop/airport-codes_csv.csv', header=TRUE)
+ABIA=na.omit(ABIAdata)
+install.packages("corrplot")
+library(tidyverse)
+library(ggplot2)
+library(usmap)
+library(lubridate)
+library(randomForest)
+library(splines)
+library(pdp)
+install.packages("maptools")
+install.packages("rgdal")
+install.packages("sp")
+head(ABIAdata)
+
+codes= codes %>% rownames_to_column('airport name')
+airport_data=merge(codes, airportmap, by=c('lat','long'))
+
+airportmap = aircodes %>%
+  select(long, lat) %>%
+  usmap_transform
+
+head(airportmap)
+
+  
+plot_usmap() + 
+  geom_point(data=airportmap, aes(x=lat.1, y=long.1))
+
+```
+This is a map with all of the airports accessible from ABIA. It is massive.
+
+
+
+
+```{r ABIAdata two, echo=FALSE}
+ 
+ str(ABIAdata)
+ install.packages('ggfortify')
+ library(ggfortify)
+
+ABIA$Origin=as.numeric(as.factor(ABIA$Origin))
+ABIA$Dest=as.numeric(as.factor(ABIA$Dest))
+
+pc_flights=prcomp(ABIA,rank=7,scale=TRUE)
+head(pc_flights$rotation)
+summary(pc_flights)
+
+head(pc_flights$rotation)
+
+
+
+
+```
+This PC analysis shows a strong relationship with the departure time, the CRS departure time, and the arrival time. In PC1 that is evident and PC2 has that evidence. I chose to do PC Analysis for this dataset since so many of the variables were interrelated to each other. The middle columns of this data set are one giant addition and subtraction equation. The departure time and the arrival time are highly correlated with each other, as seen in PC2.
+
+table(ABIAdata$Origin)
+barplot(sort(table(ABIAdata$Origin)[2:11],decreasing=T))
+factor(ABIAdata$Dest)
+table(ABIAdata$Dest,decreasing=T)
+barplot(sort(table(ABIAdata$Dest)[2:11],decreasing=T))
+
+```{r ABIAdata three, echo=FALSE}
+ 
+table(ABIAdata$Origin)
+barplot(sort(table(ABIAdata$Origin)[2:11],decreasing=T))
+factor(ABIAdata$Dest)
+table(ABIAdata$Dest)
+barplot(sort(table(ABIAdata$Dest)[2:11],decreasing=T))
+
+```
+These show the top ten origin and destination airports. Austin is shown as number one since it is the denominator. Dallas is shown as the hub, along with Denver and Atlanta. 
+
+Nashville follows, which is suprising, but I think it is more of a hub these days. 
+
+```{r ABIAdata four, echo=FALSE, warning=FALSE}
+ggplot(data= ABIAdata, mapping= aes(x=DepDelay, y=ArrDelay, color= Origin)) + 
+  geom_point() 
+```
+
+
+Figure: Relationship Between Average Arrival & Departure Delay by City of Origin.
+
+```{r, ABIAdata five, echo=FALSE, warning=FALSE}
+ggplot(data= ABIAdata, mapping= aes(x=ABIAdata$DepDelay, y=ABIAdata$ArrDelay, color= Origin)) + 
+  geom_point() 
+```
+Figure: Distance flown from ABIA per day of the week.
+```{r ABIAdata six, echo=FALSE, warning=FALSE}
+boxplot(ABIAdata$Distance ~ ABIAdata$DayOfWeek, data = ABIAdata, main = "Distance per day of the week", xlab = "Day of the week", ylab = "Distance in miles", col="red")
+
+```
+In conclusion, ABIA airport is not a main airport, it's a hub. You will probably have a layover.Weekends are the busy time, which is universal.
+
+
+
+```{r Portfolio, echo=FALSE}
+ #3 Portfolio
+ rm(list=ls())
+install.packages("mosaic")
+library(mosaic)
+library(quantmod)
+library(foreach)
+t
+mystocks=c("IVV","IBB","ICLN")
+myprices=getSymbols(mystocks, from='2016-08-01', warnings= FALSE)
+
+IVVa=adjustOHLC(IVV)
+IBBa=adjustOHLC(IBB)
+ICLNa=adjustOHLC(ICLN)
+
+#adjust for splits and dividends
+plot(ClCl(IVVa))
+plot(ClCl(IBBa))
+plot(ClCl(ICLNa))
+
+#combine close to close changes in matrix
+all_returns=cbind(ClCl(IVVa),ClCl(IBBa),ClCl(ICLNa))
+head(all_returns)
+
+#first row is NA because we didn't have a before in our data
+all_returns=as.matrix(na.omit(all_returns))
+N=nrow(all_returns)
+
+pairs(all_returns)
+plot(all_returns[,1], type='l')
+
+plot(all_returns[,3], type='l')
+
+plot(all_returns[1:(N-1),3], all_returns[2:N,3])
+
+acf(all_returns[,3])
+
+mystocks=c("IVV","IBB","ICLN")
+myprices=getSymbols(mystocks, from='2016-08-01')
+
+for(ticker in mystocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+
+head(IVVa)
+
+
+all_returns = cbind(ClCl(IVVa),
+                     ClCl(IBBa),
+                     ClCl(ICLNa))
+                    
+head(all_returns)
+all_returns = as.matrix(na.omit(all_returns))
+
+pairs(all_returns)
+#samples a random
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+
+total_wealth = 100000
+my_weights = c(0.3333,0.3333,0.3333)
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+
+holdings
+total_wealth = sum(holdings)
+total_wealth
+
+total_wealth = 100000
+weights = c(0.3333,0.3333,0.3333)
+holdings = weights * total_wealth
+n_days = 20 # capital T in the notes
+wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+for(today in 1:n_days) {
+  return.today = resample(all_returns, 1, orig.ids=FALSE)  # sampling from R matrix in notes
+  holdings = holdings + holdings*return.today
+  total_wealth = sum(holdings)
+  wealthtracker[today] = total_wealth
+}
+total_wealth
+plot(wealthtracker, type='l')
+
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  weights = c(0.333,0.333,0.333)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+  
+}
+
+trans_sim1 = rbind(rep(100000, 5000),t(sim1))
+matplot(trans_sim1, type='l', col='grey', lty= 1)
+
+head(sim1)
+hist(sim1[,n_days], 25)
+
+mean(sim1[,n_days])
+mean(sim1[,n_days] - initial_wealth)
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+
+For the portfolio of index funds, these were a S&P 500 with two tech funds. It was a S&P 500, Biotech, and CleanTech. It's basically tech ith a stable stock The total sum and loss was around 10%. Pretty rough.
+
+````{r SecondRound}
+###############
+#SECOND ROUND##
+##############
+mystocks=c("VXX","VIXM","VXZ","SVOL","XVZ")
+myprices=getSymbols(mystocks, from='2016-08-01', warnings= FALSE)
+
+VXXa=adjustOHLC(VXX)
+VIXMa=adjustOHLC(VIXM)
+VXZa=adjustOHLC(VXZ)
+SVOLa=adjustOHLC(SVOL)
+XVZa=adjustOHLC(XVZ)
+
+#adjust for splits and dividends
+plot(ClCl(VXXa))
+plot(ClCl(VIXMa))
+plot(ClCl(VXZa))
+plot(ClCl(SVOLa))
+plot(ClCl(XVZa))
+
+#combine close to close changes in matrix
+all_returns=cbind(ClCl(VXXa),ClCl(VIXMa),ClCl(VXZa), ClCl(SVOLa), ClCl(XVZa))
+head(all_returns)
+
+#first row is NA because we didn't have a before in our data
+all_returns=as.matrix(na.omit(all_returns))
+N=nrow(all_returns)
+
+pairs(all_returns)
+plot(all_returns[,1], type='l')
+
+plot(all_returns[,3], type='l')
+
+plot(all_returns[1:(N-1),3], all_returns[2:N,3])
+
+acf(all_returns[,3])
+
+mystocks=c("VXX","VIXM","VXZ","SVOL","XVZ")
+myprices=getSymbols(mystocks, from='2016-08-01')
+
+for(ticker in mystocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+
+head(VXXa)
+
+
+all_returns = cbind(ClCl(VXXa),
+                    ClCl(VIXMa),
+                    ClCl(VXZa),
+                    ClCl(SVOLa),
+                    ClCl(XVZa))
+
+head(all_returns)
+all_returns = as.matrix(na.omit(all_returns))
+
+pairs(all_returns)
+#samples a random
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+
+total_wealth = 100000
+my_weights = c(0.2,0.2,0.2,0.2,0.2)
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+
+holdings
+total_wealth = sum(holdings)
+total_wealth
+
+total_wealth = 100000
+weights = c(0.2,0.2,0.2,0.2,0.2)
+holdings = weights * total_wealth
+n_days = 20 # capital T in the notes
+wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+for(today in 1:n_days) {
+  return.today = resample(all_returns, 1, orig.ids=FALSE)  # sampling from R matrix in notes
+  holdings = holdings + holdings*return.today
+  total_wealth = sum(holdings)
+  wealthtracker[today] = total_wealth
+}
+total_wealth
+plot(wealthtracker, type='l')
+
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  weights = c(0.2,0.2,0.2,0.2,0.2)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+  
+}
+
+trans_sim1 = rbind(rep(100000, 5000),t(sim1))
+matplot(trans_sim1, type='l', col='grey', lty= 1)
+
+head(sim1)
+hist(sim1[,n_days], 25)
+
+mean(sim1[,n_days])
+mean(sim1[,n_days] - initial_wealth)
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+Second round was more volatile stocks. It ended pretty rough, losing money. Lost like 10%. It does not look good to invest in volatile stocks.
+
+```{r ThirdRound}
+#############
+#THIRD ROUND#
+#############
+mystocks=c("VWO","IEMG","EEM","SCHE")
+myprices=getSymbols(mystocks, from='2016-08-01', warnings= FALSE)
+
+VWOa=adjustOHLC(VWO)
+IEMGa=adjustOHLC(IEMG)
+EEMa=adjustOHLC(EEM)
+SCHEa=adjustOHLC(SCHE)
+
+
+#adjust for splits and dividends
+plot(ClCl(VWOa))
+plot(ClCl(IEMGa))
+plot(ClCl(EEMa))
+plot(ClCl(SCHEa))
+
+
+#combine close to close changes in matrix
+all_returns=cbind(ClCl(VWOa),ClCl(IEMGa),ClCl(EEMa), ClCl(SCHEa))
+head(all_returns)
+
+#first row is NA because we didn't have a before in our data
+all_returns=as.matrix(na.omit(all_returns))
+N=nrow(all_returns)
+
+pairs(all_returns)
+plot(all_returns[,1], type='l')
+
+plot(all_returns[,3], type='l')
+
+plot(all_returns[1:(N-1),3], all_returns[2:N,3])
+
+acf(all_returns[,3])
+
+mystocks=c("VWO","IEMG","EEM","SCHE")
+myprices=getSymbols(mystocks, from='2016-08-01')
+
+for(ticker in mystocks) {
+  expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+  eval(parse(text=expr))
+}
+
+head(VWOa)
+
+
+all_returns = cbind(ClCl(VWOa),
+                    ClCl(IEMGa),
+                    ClCl(EEMa),
+                    ClCl(SCHEa))
+                  
+
+head(all_returns)
+all_returns = as.matrix(na.omit(all_returns))
+
+pairs(all_returns)
+#samples a random
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+
+total_wealth = 100000
+my_weights = c(0.25,0.25,0.25,0.25)
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+
+holdings
+total_wealth = sum(holdings)
+total_wealth
+
+total_wealth = 100000
+weights = c(0.25,0.25,0.25,0.25)
+holdings = weights * total_wealth
+n_days = 20 # capital T in the notes
+wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+for(today in 1:n_days) {
+  return.today = resample(all_returns, 1, orig.ids=FALSE)  # sampling from R matrix in notes
+  holdings = holdings + holdings*return.today
+  total_wealth = sum(holdings)
+  wealthtracker[today] = total_wealth
+}
+total_wealth
+plot(wealthtracker, type='l')
+
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  total_wealth = initial_wealth
+  weights = c(0.25,0.25,0.25,0.25)
+  holdings = weights * total_wealth
+  n_days = 20
+  wealthtracker = rep(0, n_days)
+  for(today in 1:n_days) {
+    return.today = resample(all_returns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    total_wealth = sum(holdings)
+    wealthtracker[today] = total_wealth
+  }
+  wealthtracker
+  
+}
+
+trans_sim1 = rbind(rep(100000, 5000),t(sim1))
+matplot(trans_sim1, type='l', col='grey', lty= 1)
+
+head(sim1)
+hist(sim1[,n_days], 25)
+
+mean(sim1[,n_days])
+mean(sim1[,n_days] - initial_wealth)
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+For the last portfolio, I did emerging markets, which I think is a fascinating part of the market. This round lost nine dollars.I currently am invested in index funds, and I will consider diversifying with emerging markets.
+
+
+
+#4 Market Segmentation
+```{r Market Segmentation, echo=FALSE}
+rm(list=ls())
+
+```
+```{r MS two, echo = FALSE}
+library(tidyverse)
+library(ggplot2)
+install.packages("factoextra")
+tweets= read.csv("//Users/marycarolinekreps/Desktop/social_marketing.csv",header=TRUE, row.names=1)
+attach(tweets)
+library(factoextra)
+
+#scale data
+Z = tweets/rowSums(tweets)
+
+#correlation heat map visualization
+ggcorrplot::ggcorrplot(cor(Z), hc.order = TRUE)
+```
+We plotted the PCA results to see how much of the variances are explained by each PC analysis. We find that most of it explained by PC1, but it is not significantly more than PC2, PC3, PC4 and P5. Therefore, we decided to look at the first 5 PC analysis more closely to see the variations in the data set before applying k-means.
+```{r Market Segmentation three, echo=FALSE}
+# PCA
+PCA = prcomp(Z, scale=TRUE)
+
+plot(PCA)
+summary(PCA)
+# create a tidy summary of the loadings
+loadings_summary = PCA$rotation %>%
+  as.data.frame() %>%
+  rownames_to_column('Interest')
+```
+
+PC1 seems to pick out characteristics of more conservative users who are mostly family oriented people with positive loadings.
+```{r Market Segmentation four, echo=FALSE}
+
+# This seems to pick out characteristics of
+# more conservative users who are mostly family oriented 
+#people with positive loadings?
+loadings_summary %>%
+  select(Interest, PC1) %>%
+  arrange(desc(PC1))
+```
+PC2 seems to pick out educated adults, in their late 20's early 30's perhaps that like to stay up to date with current events, with positive loadings.
+```{r Market Segmentation five, echo=FALSE}
+#This seems to pick out educated adults, in their late 20's early 30's perhaps, like
+# to stay up to date with current events positive loadings.
+loadings_summary %>%
+  select(Interest, PC2) %>%
+  arrange(desc(PC2))
+```
+
+PC3 seems to pick out user who are more active and into the outdoors, health and nutrition and personal fitness into positive loadings.
+```{r Market Segmentation six, echo=FALSE}
+#This seems to pick out user who are more active and into the outdoors,
+#health and nutrition and personal fitness into positive loadings. 
+#This would be a potential target group for the company.
+loadings_summary %>%
+  select(Interest, PC3) %>%
+  arrange(desc(PC3))
+```
+PC4 seems to pick out social media enthusiast interested in photo sharing, shopping, beauty and fashion with positive loadings. 
+```
+```{r PC4, echo = FALSE}
+#This seems to pick out social media enthusiast interested in photo sharing 
+#shopping, beauty and fashion with positive loadings. This would be good for the
+#company as these people could serve as social media influences for their campaigns 
+#if they have a large following.
+loadings_summary %>%
+  select(Interest, PC4) %>%
+  arrange(desc(PC4))
+```
+PC5 describes a more feminine category with positive loadings.
+```{r, echo = FALSE}
+#This seems to describe those in a transitionary phase in life, perhaps 
+#just leaving college and looking to explore the world. They are interested 
+#fashion, beauty and cooking. This is a more feminine category, however, that may
+#be a bit too restrictive. 
+```
+
+```{r, echo = FALSE}
+loadings_summary %>%
+  select(Interest, PC5) %>%
+  arrange(desc(PC5))
+
+```
+
+After doing the PC analysis, we decided to also do a k-means clustering to define each of the clusters. We first used the elbow method to decide the optimal number of clusters. According to the graph below, 10 clusters would be optimal, however we know that choosing this could cause over fitting, so have chosen to make 6 clusters instead. 
+
+```{r}
+set.seed(2)
+scaled_tweets = tweets[,-c(1)]
+scaled_tweets = scale(scaled_tweets)
+
+#elbow method to find ideal number of clusters
+set.seed(1)
+fviz_nbclust(scaled_tweets, kmeans, method = "wss")
+
+#run k-means with 6 clusters 
+clust1 = kmeans(scaled_tweets, 6, nstart=25)
+```
+
+Our 6 clusters from the k-means analysis can be defined as:
+
+* Cluster 1: Conservative Family Orientated Users. These people had high scores in parent, religion, family and food.
+
+* Cluster 2: Educated Adults & Young Professionals. These people had high scores in politics, news, travel and computers.
+
+* Cluster 3: Social Media Enthusiasts/Influences. These people had high scores in cooking, beauty, fashion and photo sharing. This is a more feminine category, however, that may
+be a bit too restrictive tp stricltly categorize it this way.
+
+* Cluster 4: Un-categorized. All the values for this cluster are negative therefore it is not easily interpretable. It would be safe to assume that this cluster represents those who have a high number of the un-categorized tweets.
+
+Cluster 5: College Students. These people had high scores in online gaming, college uni and sports playing.
+
+Cluster 6: Active and Health Conscious. These people had high scores in health & nutrition, outdoors and personal fitness.
+
+```{r, echo=FALSE}
+clust1$center
+```
+
+For the most part, we can see that our K-means cluster are in tandem with the PCA results. Below is a visualization of the clusters from the K-means analysis. 
+```{r, echo=FALSE}
+fviz_cluster(clust1, data = tweets,
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             )
+```
+
+
+
+
+#5 Rueters
+
+
+```{r}
+
+rm(list=ls())
+# Load in packages
+install.packages("tm")
+install.packages("slam")
+install.packages("proxy")
+library(tm)
+library(tidyverse)
+library(slam)
+library(proxy)
+library(rpart)
+library(class)
+library(randomForest)
+```
+
+
+```{r, echo=T,message=FALSE, warning=FALSE}
+
+# Reader plain text
+readerPlain = function(fname){
+				readPlain(elem=list(content=readLines(fname)), 
+							id=fname, language='en') }
+							
+	
+# Load data
+dirstrain <- list.dirs("C50train", full.names = T)
+dirstest <- list.dirs("C50test", full.names = T)
+# remove the first element in the list, making it to be 50 elements
+dirstrain <- dirstrain[-1]
+dirstest <- dirstest[-1]
+```
+
+#### TRAINING SET 
+
+Let's deal with training set first. We rolled all 2500 directories from 50 authors in 'C50train'  together into a single corpus. Then we cleaned of punctuation, excessive white-space and common English language words. This pre-processing process facilitates the relevant terms to surface for text mining that would help build classification model.
+```{r, echo=T,message=FALSE, warning=FALSE}
+# Rolling directories together into a single corpus
+file_list = Sys.glob(paste0(dirstrain,'/*.txt'))
+# a more clever regex to get better file names
+data = lapply(file_list, readerPlain) 
+mynames = file_list %>%
+	{ strsplit(., '/', fixed=TRUE) } %>%
+	{ lapply(., tail, n=2) } %>%
+	{ lapply(., paste0, collapse = '') } %>%
+	unlist
+names(data) = mynames
+# Labeling with only names of authors
+labelstrain <- gsub("C50train/(.*)/.*","\\1", file_list)
+
+# Create the corpus
+documents_raw = Corpus(VectorSource(data))
+
+# Pre-processing
+my_documents = documents_raw %>%
+  tm_map(content_transformer(tolower))  %>%             # make everything lowercase
+  tm_map(content_transformer(removeNumbers)) %>%        # remove numbers
+  tm_map(content_transformer(removePunctuation)) %>%    # remove punctuation 
+  tm_map(content_transformer(stripWhitespace)) %>%      # remove excess white-space
+  tm_map(content_transformer(removeWords), stopwords("en")) # remove stopwords. 
+```
+
+We then created a document term matrix of the corpus. The raw results indicated that our training corpus had 2500 documents an 32570 terms. In our case, the sparsity index of 99% indicated that 99% of our DTM entries are zeros.
+```{r, echo=T,message=FALSE, warning=FALSE}
+# Create a doc-term-matrix from the corpus
+DTMtrain = DocumentTermMatrix(my_documents)
+# DTM's summary statistics
+DTMtrain  # XX% sparsity means XX% of the entries are zero
+```
+
+We could see that the noise of the "long tail"(rare terms) was actually huge. We could not learn much on those terms occurred once. As a result, we removed those terms that have count 0 in 95% of documents. The new results showed that now we only had 801 terms in the corpus and the sparsity is 86%.
+```{r, echo=T,message=FALSE, warning=FALSE}
+# Removes those terms that have count 0 in >95% of docs.  
+DTMtrain = removeSparseTerms(DTMtrain, 0.95)
+DTMtrain
+```
+Let's try to inspect the terms that appear in at least 250 documents:
+```{r, echo=T,message=FALSE, warning=FALSE}
+findFreqTerms(DTMtrain, 250)
+```
+
+#### TEST SET
+
+We did the same pre-processing process and create a document term matrix for our test corpus.
+```{r, echo=T,message=FALSE, warning=FALSE}
+file_list_test = Sys.glob(paste0(dirstest,'/*.txt'))
+data_test = lapply(file_list_test, readerPlain) 
+mynames_test = file_list_test %>%
+	{ strsplit(., '/', fixed=TRUE) } %>%
+	{ lapply(., tail, n=2) } %>%
+	{ lapply(., paste0, collapse = '') } %>%
+	unlist
+names(data_test) = mynames_test
+
+labelstest <- gsub("C50test/(.*)/.*","\\1", file_list_test)
+
+# Create the corpus
+documents_test = Corpus(VectorSource(data_test))
+
+# Pre-processing
+my_documents_test = documents_test %>%
+  tm_map(content_transformer(tolower))  %>%             # make everything lowercase
+  tm_map(content_transformer(removeNumbers)) %>%        # remove numbers
+  tm_map(content_transformer(removePunctuation)) %>%    # remove punctuation 
+  tm_map(content_transformer(stripWhitespace)) %>%      # remove excess white-space
+  tm_map(content_transformer(removeWords), stopwords("en")) # remove stopwords.
+```
+
+We could find out that our test corpus had 2500 documents an 33373 terms. The sparsity is 99%.
+```{r, echo=T,message=FALSE, warning=FALSE}
+## create a doc-term-matrix from the corpus
+DTMtest = DocumentTermMatrix(my_documents_test)
+DTMtest
+```
+After removing those therms that have count 0 in 95% of the documents, we got 816 terms and sparsity at 86% for our test corpus.
+```{r, echo=T,message=FALSE, warning=FALSE}
+DTMtest = removeSparseTerms(DTMtest, 0.95)
+DTMtest
+```
+
+There was new words in the test data that we never saw in the training set. We decided to ignore these new terms in the test data and aligned the terms in the training data with those in the test data. Now we could see that we had 743 common words in training and test.
+```{r, echo=T,message=FALSE, warning=FALSE}
+# Covert from matrix to DataFrame
+traindata <- data.frame( as.matrix( DTMtrain ), label = labelstrain)
+traindata$label <- factor(traindata$label)
+testdata <- data.frame( as.matrix( DTMtest ), label = labelstest)
+testdata $label <- factor(testdata $label)
+
+# Aligning Training data terms with Test data terms
+traindata2 <- traindata[, names(traindata) %in% names(testdata) ]
+testdata2 <- testdata[, names(traindata2) ]
+```
+
+
+### MODEL: KNN
+```{r}
+set.seed(2021)
+accuracy_knn <- c()
+
+# Make predictions with different k values
+for(k in c(1, 3, 5, 7, 9, 15, 30, 50, 70)) {
+preds <- knn(traindata2[,-ncol(traindata2)], 
+             testdata2[,-ncol(testdata2)],
+             traindata2$label,
+             k = k)
+accuracy_knn <- c(accuracy_knn,  mean(testdata2$label == preds))
+}
+  
+cat("accuracy for different k values:", accuracy_knn)
+cat("\nThe best accuracy = ", max(accuracy_knn))
+bestk <- c(1, 3, 5, 7, 9, 15, 30, 50, 70)[which.max(accuracy_knn)]
+cat("\nThe k value with best accuracy:", bestk)
+```
+From our knn analysis, we achieved best accuracy at 35.48% when k=1.
+
+### MODEL: Random Forest
+```{r}
+#build a random forest model
+set.seed(2021)
+model_rf <- randomForest(label ~ .,data = traindata2)
+
+#make predictions on testing data
+preds <- predict(model_rf,  testdata2, type = "class")
+
+accuracy_rf <- mean(testdata2$label == preds)
+accuracy_rf
+```
+Our random forest model helped us achieve 60.68% accuracy. As a result, we can conclude that the random forest model is best at predicting the author of an article on the basis of that article's textual content.
+
+
+#6
+## Association Rule Mining
+```{r, echo = FALSE, include = FALSE}
+library(arules)
+library(arulesViz)
+```
+
+```{r, echo = FALSE}
+groceries = read.transactions("groceries.txt", sep = ",")
+
+inspect(groceries[1:5])
+
+itemFrequencyPlot(groceries, topN = 20)
+
+baskets = apriori(groceries, parameter = list(support = 0.01, confidence = .25))
+
+```
+The top 5 items are whole milk, other vegetables, rolls/buns, soda, and yogurt.
+
+The frequency will also be the support for each individual item.
+
+Thresholds are initialized based on trials and errors.
+Support means that the basket of items' frequency out of the  is not lower than 1% of transactions.
+Confidence means that we are 25% confident that the consequent follows the antecedent.
+Any higher support and confidence thresholds would not allow much interpretability of our data especially when creating subsets of baskets (based on most frequent items) for further exploration.
+
+
+Now we graph top 10 strongest association rules from the thresholds above.
+
+We will do it for the Top 3 most frequent items to occur in the transactions.
+
+
+
+
+```{r, echo=FALSE}
+milk_baskets = subset(baskets, items %in% 'whole milk')
+
+top10_mb = head(milk_baskets, n = 10, by = 'lift')
+plot(top10_mb, method = 'grouped')
+
+inspect(top10_mb)
+```
+The basket is at least 2x more likely to have root vegetables, tropical fruit, yogurt, or other vegetables given that whole milk is already in the basket than not having whole milk in the basket.
+
+Now for baskets with other vegetables.
+
+
+
+
+```{r, echo = FALSE}
+veg_baskets = subset(baskets, items %in% 'other vegetables')
+
+top10_vb = head(veg_baskets, n = 10, by = 'lift')
+plot(top10_vb, method = 'grouped')
+
+inspect(top10_vb)
+```
+Top items appear together with other vegetables when it is already in the basket are root vegetables or tropical fruit.
+Item baskets like citrus fruit and root vegetables, or tropical fruit and root vegetables are at least 3x higher to have also bought other vegetables than without the aforementioned combination basket of items.
+
+Now for baskets with rolls/buns.
+
+```{r, echo = FALSE}
+buns_baskets = subset(baskets, items %in% 'rolls/buns')
+
+top10_bb = head(buns_baskets, n = 10, by = 'lift')
+plot(top10_bb, method = 'grouped')
+
+inspect(top10_bb)
+```
+When the basket already has rolls/buns in it, then it is at least 2x higher to have root vegetables, other vegetables, or whole milk in it than without the combination basket of items that include rolls/buns.
+
+Now to compare the top 20 association rules based on the conditional probability that an item will appear given an item or set of items (confidence) and based on the strength of this probability (lift = confidence/expected confidence)
+
+```{r, echo = FALSE}
+top20_conf = head(baskets, n = 20, by = 'confidence')
+plot(top20_conf, method = 'graph')
+inspect(top20_conf)
+
+top20_lift = head(baskets, n = 20, by = "lift")
+plot(top20_lift, method = 'graph')
+inspect(top20_lift)
+
+```
+When sorting by the top confidence from baskets object (support > 0.01 and confidence > 0.25), the most common item to appear in this top 20 is whole milk as a consequent item, with the first network figure easily showing the relationships. This means that given other combination of baskets, that basket will also contain milk. However, the lift from this list is not as high as our Top 20 association rules based on lift. This begs us the question: Can we really trust this association? Having a high confidence, but not as high of a lift could just mean that whole milk appearing in the same basket as other items could just be a coincidence.
+
+Looking at the other Top 20 list based on lift, we can gather that root vegetables and other vegetables as consequent items are high in lift. This means that we can trust this association. The basket will contain root vegetables or root vegetables given other basket combination of items (eg. citrus fruit and other vegetables, OR beef alone) than not having these other combination of items by more than three times.
+
+
+
